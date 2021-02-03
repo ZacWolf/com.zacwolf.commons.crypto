@@ -1,5 +1,5 @@
 /*
- * com.zacwolf.commons.test.package-info.java
+ * com.zacwolf.commons.crypto.package-info.java
  *
  * Copyright (C) 2021 Zac Morris <a href="mailto:zac@zacwolf.com">zac@zacwolf.com</a>
  *
@@ -16,7 +16,4 @@
  * You should have received a copy of the GNU General Public License along with
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
-/**
- *
- */
-package com.zacwolf.commons.test;
+package com.zacwolf.commons.crypto;
