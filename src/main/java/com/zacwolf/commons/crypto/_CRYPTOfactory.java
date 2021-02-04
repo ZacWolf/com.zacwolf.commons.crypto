@@ -699,6 +699,10 @@ java.security.KeyPairGenerator	keyPairGenerator	=	null;
 final
 	/**
 	 * @param args
+	 *
+	 * -ksp changeit -o -k "test_keys/PuTTY/test_rsa.ppk" -kp 12345
+	 *
+	 *
 	 */
 	public static void main(final String[] args){
 		logger.debug("ENTER:"+_CRYPTOfactory.class.getName()+".main()");
