@@ -701,6 +701,7 @@ final
 	 * @param args
 	 *
 	 * -ksp changeit -o -k "test_keys/PuTTY/test_rsa.ppk" -kp 12345
+	 * -ksp changeit -o -k "test_keys/Putty/test_dsa.ppk" -kp 12345
 	 *
 	 *
 	 */
