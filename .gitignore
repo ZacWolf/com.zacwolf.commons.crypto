@@ -1,4 +1,5 @@
 /target/
+!/target/*.jar
 # Compiled class file
 *.class
 

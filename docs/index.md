@@ -10,9 +10,9 @@ body {
 }
 </style>
 
-<img src="repository-open-graph-template.png" style="width:500px"> 
+<img src="repository-open-graph-template.png" style="width:635x"> 
 
-<p style="color:#ffffff;text-shadow: 1px 1px #000000;">
+<p style="color:#eeeeee;text-shadow: 2px 2px #000000;padding:25px;background: rgb(0,0,0,0.75);">
 Java 1.8 crypto library/helper classes for automating creation of Java keystore using [BouncyCastle](https://bouncycastle.org/) Provider.
 This helper can load/write existing key files from applications such as PuTTYGen, PGP, SSH, etc.
 </p>
