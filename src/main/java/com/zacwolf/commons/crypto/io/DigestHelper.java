@@ -43,7 +43,7 @@ public class DigestHelper implements org.bouncycastle.crypto.Digest {
 final			MessageDigest digest;
 
 	public DigestHelper(final String algorithm) throws NoSuchAlgorithmException {
-		digest = MessageDigest.getInstance(algorithm,_CRYPTOfactory.BC);
+		digest = MessageDigest.getInstance(algorithm,_CRYPTOfactory.PROVIDER);
 	}
 
 	public String getProvider() {

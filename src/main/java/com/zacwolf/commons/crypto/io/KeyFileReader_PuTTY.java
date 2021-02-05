@@ -52,6 +52,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.RSAPrivateKeySpec;
 import java.security.spec.RSAPublicKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.logging.Logger;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -72,85 +73,41 @@ import com.zacwolf.commons.crypto.components.SupportedCrypto;
 /**
  * This class reads a Java crypto KeyPair parsed from a PuTTYGen created PPK file.
  */
-public class KeyFileReader_PuTTY implements KeyFile{
-
+public class KeyFileReader_PuTTY extends KeyFile{
 final	static	public	String		PPKHeader		=	"PuTTY-User-Key-File-";
 final	static	public	String		PPKMacMagic		=	"putty-private-key-file-mac-key";
+final	static	private	Logger		logger;
 
-final			private	byte[]		formattedKey;
-				private	PublicKey	pubkey;
-				private	PrivateKey	privkey;
-
-				//Putty PPK specific attriute
-				private	int			format			=	0;
-				private	String		type			=	null;
-				private	String		encryption		=	null;
-				private	String		comment			=	null;
-				private	String		mac				=	null;
-
+	static {// Common static logger
+									logger			=	KeyFile.LOGGER;
+	}
 
 	/**
-	 *
-	 * @param formattedKey
-	 * @throws IOException
+	 * @param mac
+	 * @param keypair
 	 */
-    public KeyFileReader_PuTTY(final byte[] formattedKey) throws IOException {
-    	if (!isFormatted(formattedKey)) {
-			throw new IOException("Key is not formatted in the PuTTY key format!");
-		}
-    	this.formattedKey	=	formattedKey;
-    }
-
-
- final
- 	/**
- 	 *
- 	 * @param formattedKey
- 	 * @return
- 	 */
-	public static boolean isFormatted(final byte[] formattedKey) {
-final	BufferedReader		reader	=	new BufferedReader(new InputStreamReader(new ByteArrayInputStream(formattedKey)));
-		try {
-		String				line	=	reader.readLine();
-			//The first line of the file should be PPKHeader, but incase, read through any empty or white space containing lines
-			while(line != null && (line.isEmpty() || !line.matches("(.*)[a-zA-Z0-9](.*)"))) {
-							line	=	reader.readLine();
-			}
-			return line != null && line.startsWith(PPKHeader);
-		} catch (final IOException ex) {
-			return false;
-		}
+	private KeyFileReader_PuTTY(final String mac, final KeyPair keypair){
+		super(mac, keypair);
 	}
 
 
-@Override
 final
 	/**
-	 * @param passphrase If the private key is encrypted, as passphrase is required to decrypt the key
+	 * @param passphrase If the private key is encrypted, a passphrase is required to decrypt the key
 	 * @return KeyPair
 	 */
-	public KeyPair toKeyPair(final String passphrase) throws IOException, InvalidPassphraseException{
-		if (privkey!=null) {
-			return new KeyPair(pubkey,privkey);
-		}
-
-final	BufferedReader		reader				=	new BufferedReader(new InputStreamReader(new ByteArrayInputStream(formattedKey)));
+	private static KeyPair toKeyPair(final byte[] keyContent, final String passphrase,final String mac, final String type, final String encryption, final String comment) throws IOException, InvalidPassphraseException{
+		logger.fine("ENTER:"+KeyFileReader_PuTTY.class.getName()+".toKeyPair() [private]");
+		try {
+final	BufferedReader		reader				=	new BufferedReader(new InputStreamReader(new ByteArrayInputStream(keyContent)));
 final	StringBuilder		publicbase64		=	new StringBuilder();
 final	StringBuilder		privatebase64		=	new StringBuilder();
+		PublicKey			pubkey				=	null;
+		PrivateKey			privkey				=	null;
 		try {
 		String				line				=	reader.readLine();
 			while(line != null && !line.trim().isEmpty()) {
 							line				=	line.trim();
-				if (line.startsWith(PPKHeader)) {
-							format				=	line.startsWith(PPKHeader+"2:") ? 2 : 1;
-							type				=	line.substring(line.indexOf(":") + 1).trim();
-				}
-				if (line.startsWith("Encryption:")) {
-							encryption			=	line.substring(line.indexOf(":") + 1).trim();
-				}
-				if (line.startsWith("Comment:")) {
-							comment				=	line.substring(line.indexOf(":") + 1).trim();
-				}
 				if (line.startsWith("Public-Lines:")) {
 final	int					lines				=	Integer.parseInt(line.substring(line.indexOf(":") + 1).trim());
 					for (int i = 0; i < lines; i++) {
@@ -173,12 +130,7 @@ final	int					lines				=	Integer.parseInt(line.substring(line.indexOf(":") + 1).
 						}
 					}
 				}
-				if (line.startsWith("Private-MAC:")) {
-							mac					=	line.substring(line.indexOf(":")+1).trim();
-				}			line				=	reader.readLine();
-			}
-			if (format==1) {
-				throw new IOException("Putty version 1 key files [PuTTY-User-Key-File-1] are not supported at this time");
+							line				=	reader.readLine();
 			}
 
 final	byte[]				privblob			=	Base64.decode(privatebase64.toString());
@@ -190,9 +142,13 @@ final	String				t					=	pubreader.readString();
 			}
 
 			try {
-				if (format>0 && type!=null && privblob.length>0 && pubblob.length>0) {
+				if (privblob.length>0 && pubblob.length>0) {
 					//If encryption is set, use the passphrase to decrypt the private key
-					if (encryption.equals("aes256-cbc")) {
+					if (encryption!=null && encryption.equals("aes256-cbc")) {
+						if (passphrase==null || passphrase.isEmpty()) {
+							throw new InvalidPassphraseException("This key is encrypted, and you did not provide a passphrase");
+						}
+						logger.fine(KeyFileReader_PuTTY.class.getName()+".toKeyPair() Decrypting "+encryption+" encoded private key");
 final	SupportedCipher			cipher			=	SupportedCrypto.getInstance(encryption).cipher();
 final	byte[]					iv				=	new byte[40];
 final	byte[]					key				=	new byte[40];
@@ -220,11 +176,11 @@ final	ByteArrayOutputStream	valToMacHash	=	new ByteArrayOutputStream();
 								// Encode the length of the type parm, then its value
 								valToMacHash.write(ByteArrayWriter.encodeInt(type.length()));
 								valToMacHash.write(type.getBytes());
-
+					if (encryption!=null) {
 								// Encode the length of the encryption parm, then its value
 								valToMacHash.write(ByteArrayWriter.encodeInt(encryption.length()));
 								valToMacHash.write(encryption.getBytes());
-
+					}
 								// Encode the length of the comment parm, then its value
 								valToMacHash.write(ByteArrayWriter.encodeInt(comment.length()));
 								valToMacHash.write(comment.getBytes());
@@ -240,10 +196,11 @@ final	ByteArrayOutputStream	valToMacHash	=	new ByteArrayOutputStream();
 								valToMacHash.write(privblob);
 
 								// Create an HmacSHA1 macdigest
-final	Mac						m				=	Mac.getInstance("HmacSHA1",_CRYPTOfactory.BC);
+final	Mac						m				=	Mac.getInstance("HmacSHA1",_CRYPTOfactory.PROVIDER);
 								// Specify a SecretKey that is itself an SH1 hash of the value PPKMacMagic+passphrase
-								m.init(new SecretKeySpec(MessageDigest.getInstance("SHA-1",_CRYPTOfactory.BC).digest((PPKMacMagic+(encryption!=null?passphrase:"")).getBytes()), "HmacSHA1"));
+								m.init(new SecretKeySpec(MessageDigest.getInstance("SHA-1",_CRYPTOfactory.PROVIDER).digest((PPKMacMagic+(encryption!=null?passphrase:"")).getBytes()), "HmacSHA1"));
 final	String					mhash			=	new String(Hex.encode(m.doFinal(valToMacHash.toByteArray())));
+					logger.fine(KeyFileReader_PuTTY.class.getName()+"File mac:"+mac+" Generated mac:"+mhash);
 					if (!mac.equals(mhash)){
 						/* There is no "real" invalid hash exception, but the number one reason that the hash values
 						 * don't match is because the passphrase used to decrypted the private key is incorrect
@@ -252,13 +209,14 @@ final	String					mhash			=	new String(Hex.encode(m.doFinal(valToMacHash.toByteAr
 						 */
 						if (encryption!=null) {
 							throw new InvalidPassphraseException();
+						} else {
+							/* After decryption of the private key failing, the reason that hash values don't match
+							 * is because one of the other key values (type,encryption,comment) has been modified.
+							 * More than likely it's the comment. Since this is the same logic that PuTTY uses to
+							 * varify a key file, then that's what we'll use as well.
+							 */
+							throw new IOException("This file has been altered/tampered with since it was created by PuTTYGen. WILL NOT PROCEED!");
 						}
-						/* After decryption of the private key failing, the reason that hash values don't match
-						 * is because one of the other key values (type,encryption,comment) has been modified.
-						 * More than likely it's the comment. Since this is the same logic that PuTTY uses to
-						 * varify a key file, then that's what we'll use as well.
-						 */
-						throw new IOException("This file has been altered/tampered with since it was created by PuTTYGen. WILL NOT PROCEED!");
 					}
 
 		/*
@@ -271,18 +229,15 @@ final	String					mhash			=	new String(Hex.encode(m.doFinal(valToMacHash.toByteAr
 		 * ssh-ed25519
 		 */
 final	ByteArrayReader			privreader		=	new ByteArrayReader(privblob);
-					try {
+					try {logger.fine(KeyFileReader_PuTTY.class.getName()+".toKeyPair() [PRIVATE] found private key of type:"+type);
 // ssh-dss
 						if (type.equals("ssh-dss")) {
+
 final	BigInteger				p				=	pubreader.readBigInteger();
 final	BigInteger				q				=	pubreader.readBigInteger();
 final	BigInteger				g				=	pubreader.readBigInteger();
 final	BigInteger				y				=	pubreader.readBigInteger();
 final	BigInteger				x				=	privreader.readBigInteger();
-
-							if (format == 1) {
-								//TODO add putty1 format handing
-							}
 final	KeyFactory				factory			=	SupportedCrypto.getInstance(type).keyfactory().getKeyFactory();
 								pubkey			=	factory.generatePublic(new DSAPublicKeySpec(p, q, g, y));
 								privkey			=	factory.generatePrivate(new DSAPrivateKeySpec(x, p, q, g));
@@ -369,15 +324,74 @@ final	KeyFactory			factory			=	SupportedCrypto.getInstance(type).keyfactory().ge
 			} finally {
 				pubreader.close();
 			}
-			return new KeyPair(pubkey,privkey);
-		} catch (final Throwable ex) {
-			if (ex instanceof IOException) {
-				throw (IOException)ex;
-			} else if (ex instanceof InvalidPassphraseException) {
-				throw (InvalidPassphraseException)ex;
+			if (pubkey!=null && privkey!=null) {
+				return new KeyPair(pubkey,privkey);
+			} else {
+				throw new NullPointerException("The pubkey and/or the privkey values were null");
 			}
-			throw new IOException("The PuTTY key could not be read! "+ ex.getMessage());
+		} catch (final Throwable ex) {
+			try {
+				if (ex instanceof IOException) {
+					throw (IOException)ex;
+				} else if (ex instanceof InvalidPassphraseException) {
+					throw (InvalidPassphraseException)ex;
+				}
+				throw new IOException("The PuTTY key could not be read! "+ ex.getMessage());
+			} finally {
+				logger.severe(KeyFileReader_PuTTY.class.getName()+".read() [STATIC] ERROR:"+ex.getMessage());
+			}
+		}
+		} finally {
+			logger.fine("EXIT:"+KeyFileReader_PuTTY.class.getName()+".read() [STATIC]");
 		}
 	}
+
+
+
+final
+ 	/**
+ 	 *
+ 	 * @param formattedKey
+ 	 * @return
+ 	 */
+	public static KeyFile read(final byte[] keyContent,final String passphrase)  throws IOException, InvalidPassphraseException, ReaderException{
+		logger.fine("ENTER:"+KeyFileReader_PuTTY.class.getName()+".read() [STATIC]");
+		try {
+		int					format				=	0;
+		String				type				=	null;
+		String				encryption			=	null;
+		String				comment				=	null;
+		String				mac					=	null;
+final	BufferedReader		reader				=	new BufferedReader(new InputStreamReader(new ByteArrayInputStream(keyContent)));
+			try {
+		String				line				=	reader.readLine();
+				while(line != null && !line.trim().isEmpty()) {
+							line				=	line.trim();
+					if (line.startsWith(PPKHeader)) {
+							format				=	line.startsWith(PPKHeader+"2:") ? 2 : 1;
+							type				=	line.substring(line.indexOf(":") + 1).trim();
+					}
+					if (line.startsWith("Encryption:")) {
+							encryption			=	line.substring(line.indexOf(":") + 1).trim();
+					}
+					if (line.startsWith("Comment:")) {
+							comment				=	line.substring(line.indexOf(":") + 1).trim();
+					}
+					if (line.startsWith("Private-MAC:")) {
+							mac					=	line.substring(line.indexOf(":")+1).trim();
+					}		line				=	reader.readLine();
+				}
+				if (format==0) {
+					throw new ReaderException("Not a PuTTY key file");
+				}
+				return new KeyFile(mac,toKeyPair(keyContent,passphrase,mac,type,encryption,comment));
+			} finally {
+				reader.close();
+			}
+		} finally {
+			logger.fine("EXIT:"+KeyFileReader_PuTTY.class.getName()+".read() [STATIC]");
+		}
+	}
+
 
 }

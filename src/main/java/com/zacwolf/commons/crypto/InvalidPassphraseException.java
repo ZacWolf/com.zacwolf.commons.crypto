@@ -42,4 +42,8 @@ public class InvalidPassphraseException extends Exception {
 	public InvalidPassphraseException(final Exception ex) {
 		super(ex.getMessage());
 	}
+
+	public InvalidPassphraseException(final String message) {
+		super(message);
+	}
 }

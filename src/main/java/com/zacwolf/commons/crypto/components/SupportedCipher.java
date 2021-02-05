@@ -20,6 +20,7 @@ package com.zacwolf.commons.crypto.components;
 import java.io.IOException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 
 import javax.crypto.Cipher;
@@ -116,6 +117,16 @@ final	SecretKeySpec	kspec		=	new SecretKeySpec(actualKey, spec.name());
 		} catch (final InvalidKeyException | InvalidAlgorithmParameterException e) {
 			//won't happen because values are hardcoded
 		}
+	}
+
+	public KeyPair generateKeyPair(final int keySize) {
+java.security.KeyPairGenerator	keyPairGenerator	=	null;
+		try {					keyPairGenerator	=	java.security.KeyPairGenerator.getInstance(specname(), cipher.getProvider());
+		} catch (final NoSuchAlgorithmException e) {
+			//won't happen because values are hardcoded;
+		}
+		keyPairGenerator.initialize(keySize);
+		return keyPairGenerator.generateKeyPair();
 	}
 
 	/**

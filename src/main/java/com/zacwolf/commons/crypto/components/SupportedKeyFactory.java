@@ -41,9 +41,10 @@ public enum SupportedKeyFactory {
 
 final	String		value;
 final	Provider	provider;
+
 	SupportedKeyFactory(final String value){
 		this.value		=	value;
-		provider		=	_CRYPTOfactory.BC;
+		provider		=	_CRYPTOfactory.PROVIDER;
 	}
 
 	SupportedKeyFactory(final String value, final Provider provider){

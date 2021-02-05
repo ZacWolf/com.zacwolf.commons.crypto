@@ -25,11 +25,11 @@ import java.io.InputStream;
 import java.math.BigInteger;
 import java.security.Key;
 import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.KeyStore.PasswordProtection;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.PublicKey;
@@ -71,21 +71,17 @@ import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
-import com.zacwolf.commons.crypto.components.SupportedCipher;
 import com.zacwolf.commons.crypto.components.SupportedCrypto;
 import com.zacwolf.commons.crypto.components.SupportedDigest;
 import com.zacwolf.commons.crypto.io.KeyFile;
-import com.zacwolf.commons.crypto.io.KeyFileReaderFactory;
 
 /**
  *
  */
 public class _CRYPTOfactory{
-//final			static	DefaultAlgorithmNameFinder	nameFinder		=	new DefaultAlgorithmNameFinder();
-final	public	static	Provider					BC				=	new BouncyCastleProvider();
-//final	public	static	Provider					EdDSA			=	new EdDSASecurityProvider();
+final	public	static	Provider					PROVIDER		=	new BouncyCastleProvider();
 		public	static	SecureRandom				RANDOM;
-final	private	static	Logger						logger			=	LogManager.getLogger(_CRYPTOfactory.class.getName());
+final	public	static	Logger						logger			=	LogManager.getLogger(_CRYPTOfactory.class.getName());
 
 		private	static enum KEYSTOREDEFAULTS{
 			TYPE("PKCS12"),
@@ -111,19 +107,18 @@ final	private	static	Logger						logger			=	LogManager.getLogger(_CRYPTOfactory.
 		}
 
 		static {
-			Security.addProvider(BC);
-//			Security.addProvider(EdDSA);
+			Security.addProvider(PROVIDER);
 			Security.setProperty("crypto.policy", "unlimited");
+			System.setProperty("java.util.logging.manager","org.apache.logging.log4j.jul.LogManager");
 			try {
 				RANDOM	=	SecureRandom.getInstanceStrong();
 			} catch (final NoSuchAlgorithmException e) {
 				//won't happen because this is a system provided instance
+				e.printStackTrace();
 			}
 		}
 
-final	private	static	int							MAXACTIVE		=	Runtime.getRuntime().availableProcessors();
-		private	static	int							activecrypts	=	0;
-
+//INSTANCE VARIABLES
 final	private			File						keyStoreFile;
 final	private			KeyStore					keyStore;
 final	private			PasswordProtection			keyStorePASS;
@@ -143,7 +138,7 @@ final	private			Certificate					keyStoreRootCA;
 	 * @throws CertIOException
 	 * @throws CertificateException
 	 */
-	public _CRYPTOfactory(final KeyStore keyStore, final String keyStorePass) throws KeyStoreException,NoSuchAlgorithmException, OperatorCreationException, CertIOException, CertificateException{
+	public _CRYPTOfactory(final KeyStore keyStore, final String keyStorePass) throws KeyStoreException,NoSuchAlgorithmException, OperatorCreationException, IOException, CertificateException{
 		this(null,keyStore,keyStorePass,KEYSTOREDEFAULTS.ROOTALIAS.toString());
 	}
 
@@ -161,7 +156,7 @@ final	private			Certificate					keyStoreRootCA;
 	 * @throws CertIOException
 	 * @throws CertificateException
 	 */
-	public _CRYPTOfactory(final KeyStore keyStore, final String keyStorePass, final String keyStoreRootAlias) throws KeyStoreException,NoSuchAlgorithmException, OperatorCreationException, CertIOException, CertificateException{
+	public _CRYPTOfactory(final KeyStore keyStore, final String keyStorePass, final String keyStoreRootAlias) throws KeyStoreException,NoSuchAlgorithmException, OperatorCreationException, IOException, CertificateException{
 		this(null,keyStore,keyStorePass,keyStoreRootAlias);
 	}
 
@@ -175,11 +170,11 @@ final	private			Certificate					keyStoreRootCA;
 	 * @throws CertIOException
 	 * @throws CertificateException
 	 */
-	public _CRYPTOfactory(final File keyStoreFile, final KeyStore keyStore, final String keyStorePass) throws KeyStoreException,NoSuchAlgorithmException, OperatorCreationException, CertIOException, CertificateException{
+	public _CRYPTOfactory(final File keyStoreFile, final KeyStore keyStore, final String keyStorePass) throws KeyStoreException,NoSuchAlgorithmException, OperatorCreationException, IOException, CertificateException{
 		this(keyStoreFile,keyStore,keyStorePass,KEYSTOREDEFAULTS.ROOTALIAS.toString());
 	}
 
-	public _CRYPTOfactory(final File keyStoreFile, final KeyStore keyStore, final String keyStorePass, final String keyStoreRootAlias) throws KeyStoreException,NoSuchAlgorithmException, OperatorCreationException, CertIOException, CertificateException{
+	public _CRYPTOfactory(final File keyStoreFile, final KeyStore keyStore, final String keyStorePass, final String keyStoreRootAlias) throws KeyStoreException,NoSuchAlgorithmException, OperatorCreationException, IOException, CertificateException{
 		logger.debug("ENTER:"+_CRYPTOfactory.class.getName()+" CONSTRUCTOR");
 		try {				this.keyStoreFile			=	keyStoreFile;
 			if (this.keyStoreFile==null) {
@@ -198,8 +193,10 @@ final	SupportedCrypto				sc					=	(SupportedCrypto)KEYSTOREDEFAULTS.CRYPTOSPEC.v
 					  "The following will be generated and added to the KeyStore via alias:"+keyStoreRootAlias+"\n"+
 					  "A PrivateKey of type  "+sc.name()+"\n"+
 					  "A SelfSigned rootCA signed with "+ sc.signature().toString()+" that expires in 5 years.");
-final	KeyPair						keyPair				=	new KeyPairGenerator(sc.cipher()).generate((int)KEYSTOREDEFAULTS.KEYSIZE.value());
+final	KeyPair						keyPair				=	sc.cipher().generateKeyPair((int)KEYSTOREDEFAULTS.KEYSIZE.value());
 									keyStoreRootCA		=	generateSelfSignedCert(keyPair);
+				keyStore.setKeyEntry(keyStoreRootAlias,privKey, keyStorePass!=null && keyStorePass.length()>0?keyStorePass.toCharArray():keyStorePASS.getPassword(), new Certificate[] {keyStoreRootCA});
+				writeKeyStore();
 			} else {				keyStoreRootCA		=	keyStore.getCertificate(keyStoreRootAlias);
 			}
 			keyStoreRootKeyPair	=	new KeyPair(keyStoreRootCA.getPublicKey(), (PrivateKey) privKey);
@@ -272,7 +269,7 @@ final
 		if (!overwrite && keyStore.containsAlias(alias)) {
 			throw new DuplicateEntryException(alias);
 		}
-		keyStore.setKeyEntry(alias.toUpperCase(), k, password!=null && password.length()>0?password.toCharArray():keyStorePASS.getPassword(), chain);
+		keyStore.setKeyEntry(alias, k, password!=null && password.length()>0?password.toCharArray():keyStorePASS.getPassword(), chain);
 		writeKeyStore();
 	}
 
@@ -301,25 +298,15 @@ final	FileOutputStream	out							=	new FileOutputStream(keyStoreFile);
 		}
 	}
 
+
+
 final
 	/**
-	 * Since crypt operations are very CPU intensive, we keep the number
-	 * of threads actually doing crypt operations to a max number
+	 * @param name
+	 * @param extension
+	 * @return
+	 * @throws IOException
 	 */
-	void ready(){
-		while (activecrypts>MAXACTIVE) {
-			try {
-				Thread.sleep(500);
-			} catch (final InterruptedException e) {
-				// If interrupted (shutting down), drop out of waiting
-			}
-		}
-	}
-
-
-
-final
-
 	static File createTempFile(final String name, final String extension) throws IOException{
 final	File	file	=	File.createTempFile(name, extension);
 				file.deleteOnExit();
@@ -357,11 +344,7 @@ final	X509v3CertificateBuilder	certificateBuilder	=	new JcaX509v3CertificateBuil
 		        .addExtension(Extension.authorityKeyIdentifier, false, new X509ExtensionUtils(digestCal).createAuthorityKeyIdentifier(SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded())))
 		        .addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
 
-			return new JcaX509CertificateConverter().setProvider(BC).getCertificate(certificateBuilder.build(contentSigner));
-
-//		} catch (final ValueException e ) {
-//			//won't happen because values are hardedcoded
-//			return null;
+			return new JcaX509CertificateConverter().setProvider(PROVIDER).getCertificate(certificateBuilder.build(contentSigner));
 		} finally {
 			logger.debug("EXIT:"+_CRYPTOfactory.class.getName()+".generateSelfSignedCert() [STATIC]");
 		}
@@ -398,7 +381,7 @@ final	X509v3CertificateBuilder	certificateBuilder	=	new JcaX509v3CertificateBuil
 		        .addExtension(Extension.subjectKeyIdentifier, false, new X509ExtensionUtils(digestCal).createSubjectKeyIdentifier(SubjectPublicKeyInfo.getInstance(pubkey_toSign.getEncoded())))
 		        .addExtension(Extension.authorityKeyIdentifier, false, new X509ExtensionUtils(digestCal).createAuthorityKeyIdentifier(SubjectPublicKeyInfo.getInstance(keyStoreRootKeyPair.getPublic().getEncoded())))
 		        .addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
-			return new JcaX509CertificateConverter().setProvider(BC).getCertificate(certificateBuilder.build(contentSigner));
+			return new JcaX509CertificateConverter().setProvider(PROVIDER).getCertificate(certificateBuilder.build(contentSigner));
 //		} catch (final ValueException e) {
 //			//won't happen because values are hardcoded
 //			return null;
@@ -446,16 +429,15 @@ final
 
 final
 	/**
-	 * Dump the providers/ciphers
+	 * Dump the available ciphers for the default provider
 	 */
 	public static void dumpCiphers(){
-        for (final Provider provider : Security.getProviders()) {
-            for (final Provider.Service service : provider.getServices()) {
-                //if ("Cipher".equals(service.getType())) {
-                    System.out.println(String.format("provider:%s,  type:%s,  algorithm:%s", service.getProvider(), service.getType(), service.getAlgorithm()));
-                //}
-            }
+		System.out.println("================================================================================");
+		System.out.println("Provider:"+PROVIDER);
+        for (final Provider.Service service : PROVIDER.getServices()) {
+        	System.out.println(String.format("type:%s,  algorithm:%s", service.getType(), service.getAlgorithm()));
         }
+        System.out.println("================================================================================");
 	}
 
 
@@ -478,9 +460,14 @@ final
 	public static KeyStore createNewKeyStore(final	File			keyStoreFile,
 											 final	String			keyStorePassword,
 											 final	File			keyFile,
-											 final String			keyFilePassword,
+											 final	String			keyFilePassword,
 											 final	int				expiresInDays
-											) throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, OperatorCreationException {
+											) throws KeyStoreException,
+													 NoSuchAlgorithmException,
+													 CertificateException,
+													 IOException,
+													 OperatorCreationException,
+													 InvalidPassphraseException {
 		return createNewKeyStore(keyStoreFile,keyStorePassword,null,keyFile,keyFilePassword,expiresInDays);
 	}
 
@@ -508,7 +495,13 @@ final
 											 final	File			keyFile,
 											 final	String			keyFilePassword,
 											 final	int				expiresInDays
-											) throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, OperatorCreationException {
+											) throws KeyStoreException,
+													 NoSuchAlgorithmException,
+													 CertificateException,
+													 IOException,
+													 OperatorCreationException,
+													 InvalidPassphraseException
+	{
 		return createNewKeyStoreFile(null,keyStoreFile,keyStorePassword,null,keyFile,keyFilePassword,expiresInDays);
 	}
 
@@ -533,7 +526,13 @@ final
 											 final	File			keyFile,
 											 final	String			keyFilePassword,
 											 final	int				expiresInDays
-											) throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, OperatorCreationException {
+											) throws KeyStoreException,
+													 NoSuchAlgorithmException,
+													 CertificateException,
+													 IOException,
+													 OperatorCreationException,
+													 InvalidPassphraseException
+	{
 		return createNewKeyStoreFile(keyStoreType,keyStoreFile,keyStorePassword,null,keyFile,keyFilePassword,expiresInDays);
 	}
 
@@ -561,38 +560,72 @@ final
 											 final	File			keyFile,
 											 		String			keyFilePassword,
 											 final	int				expiresInDays
-											) throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, OperatorCreationException {
-		if (keyStoreFile==null) {
-			throw new KeyStoreException("keyStoreFile can not be null");
-		}
-		if (keyStoreFile.exists()) {
-			throw new IOException("KeyStore:"+keyStoreFile.getAbsolutePath()+" already exists!");
-		}
-		if (keyFile==null || !keyFile.exists()) {
-			throw new IOException("Key file does not exist");
-		}
-		if (keyStoreRootAlias==null) {
+											) throws	KeyStoreException,
+														InvalidPassphraseException,
+														NoSuchAlgorithmException,
+														CertificateException,
+														IOException,
+														OperatorCreationException
+	{
+		logger.debug("ENTER:"+_CRYPTOfactory.class.getName()+".createNewKeyStoreFile()");
+		try {
+			if (keyStoreFile==null) {
+				throw new KeyStoreException("keyStoreFile can not be null");
+			}
+			if (keyStoreFile.exists()) {
+				throw new IOException("KeyStore:"+keyStoreFile.getAbsolutePath()+" already exists!");
+			}
+			if (keyStoreRootAlias==null) {
 									keyStoreRootAlias	=	KEYSTOREDEFAULTS.ROOTALIAS.toString();
-		}
-		if (keyStoreType==null) {
-			keyStoreType		=	KEYSTOREDEFAULTS.TYPE.toString();
-		}
-		if (keyFilePassword==null) {
+			}
+			if (keyStoreType==null) {
+									keyStoreType		=	KEYSTOREDEFAULTS.TYPE.toString();
+			}
+			if (keyFilePassword==null) {
 									keyFilePassword		=	keyStorePassword;
+			}
+final	KeyPair						keyPair;
+			if (keyFile==null || !keyFile.exists()) {
+									keyPair				=	getKeyPairFromFile(keyFile,keyFilePassword);
+			} else {//If keyFile was not provided (or the file doesn't exist) generate a default keyPair.
+final	KeyPairGenerator			kgen				=	((SupportedCrypto)KEYSTOREDEFAULTS.CRYPTOSPEC.value()).keyfactory().getKeyPairGenerator();
+									kgen.initialize((int)KEYSTOREDEFAULTS.KEYSIZE.value());
+									keyPair				=	kgen.generateKeyPair();
+			}
+			return createNewKeyStoreFile(keyStoreType,
+										 keyStoreFile,
+										 keyStorePassword,
+										 keyStoreRootAlias,
+										 keyPair.getPrivate(),
+										 new Certificate[]{generateSelfSignedCert(keyPair)}
+			);
+		} finally {
+			logger.debug("EXIT:"+_CRYPTOfactory.class.getName()+".createNewKeyStoreFile()");
 		}
-final	KeyPair						keyPair				=	getKeyPairFromFile(keyFile,keyFilePassword);
-final	Certificate[]				chain				=	new Certificate[]{generateSelfSignedCert(keyPair)};
-		return createNewKeyStoreFile(keyStoreType, keyStoreFile,keyStorePassword,keyStoreRootAlias,keyPair.getPrivate(),chain);
 	}
 
-	final
 
+
+final
+	/**
+	 * @param keyStoreType
+	 * @param keyStoreFile
+	 * @param keyStorePassword
+	 * @param keyStoreRootAlias
+	 * @param keyStoreRootPrivateKey
+	 * @param keyStoreRootChain
+	 * @return
+	 * @throws KeyStoreException
+	 * @throws NoSuchAlgorithmException
+	 * @throws CertificateException
+	 * @throws IOException
+	 */
 	public static KeyStore createNewKeyStoreFile(final	String			keyStoreType,
 												 final	File			keyStoreFile,
 												 final	String			keyStorePassword,
 												 		String			keyStoreRootAlias,
 												 final	PrivateKey		keyStoreRootPrivateKey,
-												 final Certificate[]	keyStoreRootChain
+												 final 	Certificate[]	keyStoreRootChain
 												) throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
 		if (keyStoreFile==null) {
 			throw new KeyStoreException("keyStoreFile can not be null");
@@ -601,17 +634,17 @@ final	Certificate[]				chain				=	new Certificate[]{generateSelfSignedCert(keyPa
 			throw new KeyStoreException("KeyStore:"+keyStoreFile.getAbsolutePath()+" already exists!");
 		}
 		if (keyStoreRootAlias==null) {
-			keyStoreRootAlias	=	KEYSTOREDEFAULTS.TYPE.toString();
+							keyStoreRootAlias	=	KEYSTOREDEFAULTS.TYPE.toString();
 		}
 		if (keyStoreRootPrivateKey==null || keyStoreRootChain==null) {
 			throw new KeyStoreException("You must provide a ROOT PrivateKey and a Certificate chain to create a new KeyStore with this method");
 		}
 		logger.debug("ENTER:"+_CRYPTOfactory.class.getName()+".createNewKeyStore()  [STATIC]");
 		try {
-final	KeyStore			ks			=	KeyStore.getInstance(keyStoreType,BC);
+final	KeyStore			ks					=	KeyStore.getInstance(keyStoreType,PROVIDER);
 							ks.load(null, keyStorePassword.toCharArray());
 							ks.setKeyEntry(keyStoreRootAlias, keyStoreRootPrivateKey, keyStorePassword.toCharArray(), keyStoreRootChain);
-final	FileOutputStream	out			=	new FileOutputStream(keyStoreFile);
+final	FileOutputStream	out					=	new FileOutputStream(keyStoreFile);
 			try { 			ks.store(out, keyStorePassword.toCharArray());
 			} finally {		out.close();
 			}
@@ -630,15 +663,10 @@ final
 	 * @return
 	 * @throws IOException
 	 */
-	public static KeyPair getKeyPairFromFile(final File keyfile, final String keypassword) throws IOException {
+	public static KeyPair getKeyPairFromFile(final File keyfile, final String keypassword) throws IOException,InvalidPassphraseException {
 		logger.debug("ENTER:"+_CRYPTOfactory.class.getName()+".getKeyPairFromFile() [STATIC]");
 		try {
-final	KeyFile	keyFile	=	KeyFileReaderFactory.parse(keyfile);
-			try {
-				return keyFile.toKeyPair(keypassword);
-			} catch (final InvalidPassphraseException e) {
-				throw new IOException(e);
-			}
+			return KeyFile.readContent(keyfile,keypassword).getKeyPair();
 		} finally {
 			logger.debug("EXIT:"+_CRYPTOfactory.class.getName()+".getKeyPairFromFile() [STATIC]");
 		}
@@ -652,64 +680,43 @@ final
 	 * @return
 	 * @throws IOException
 	 */
-	public static KeyPair getKeyPairFromInputStream(final InputStream filein, final String password) throws IOException {
+	public static KeyPair getKeyPairFromInputStream(final InputStream filein, final String password) throws IOException,InvalidPassphraseException {
 		logger.debug("ENTER:"+_CRYPTOfactory.class.getName()+".getKeyPairFromInputStream() [STATIC]");
-final	KeyFile	keyFile		=	KeyFileReaderFactory.parse(filein);
 		try {
-			return keyFile.toKeyPair(password);
-		} catch (final InvalidPassphraseException e) {
-			throw new IOException(e);
+			return KeyFile.readContent(filein,password).getKeyPair();
 		} finally {
 			logger.debug("EXIT:"+_CRYPTOfactory.class.getName()+".getKeyPairFromInputStream() [STATIC]");
 		}
 	}
 
 
-final
-	/**
-	 *
-	 */
-	public static class KeyPairGenerator{
-final	SupportedCipher	sc;
-
-		/**
-		 * @param sc
-		 */
-		public KeyPairGenerator(final SupportedCipher sc) {
-			this.sc	=	sc;
-		}
-
-		/**
-		 * @param keySize
-		 * @return
-		 */
-		public KeyPair generate(final int keySize) {
-java.security.KeyPairGenerator	keyPairGenerator	=	null;
-			try {				keyPairGenerator	=	java.security.KeyPairGenerator.getInstance(sc.specname(), BouncyCastleProvider.PROVIDER_NAME);
-			} catch (NoSuchAlgorithmException | NoSuchProviderException e) {
-				//won't happen because values are hardcoded;
-			}
-								keyPairGenerator.initialize(keySize);
-			return keyPairGenerator.generateKeyPair();
-		}
-
-	}
-
 
 final
 	/**
 	 * @param args
 	 *
-	 * -ksp changeit -o -k "test_keys/PuTTY/test_rsa.ppk" -kp 12345
-	 * -ksp changeit -o -k "test_keys/Putty/test_dsa.ppk" -kp 12345
+	 * To dump the list of currently supported Bouncy Castle algorithms
+	 * -ksp changeit -dc
 	 *
+	 * To load test keys of type PuTTY:
+	 * -ksp changeit -o -k "${project_loc}/test_keys/PuTTY/test_rsa.ppk" -kp 12345
+	 * -ksp changeit -o -k "${project_loc}/test_keys/Putty/test_dsa.ppk" -kp 12345
+	 * -ksp changeit -o -k "${project_loc}/test_keys/Putty/test_ecdsa_nistp256.ppk" -kp 12345
+	 * -ksp changeit -o -k "${project_loc}/test_keys/Putty/test_ecdsa_nistp384.ppk" -kp 12345
+	 * -ksp changeit -o -k "${project_loc}/test_keys/Putty/test_ecdsa_nistp521.ppk" -kp 12345
+	 * -ksp changeit -o -k "${project_loc}/test_keys/Putty/test_ed25519.ppk" -kp 12345
 	 *
+	 * -ksp changeit -o -k "${project_loc}/test_keys/OPENSSL/test_ssh-ed25519.pem" -kp 12345
+	 * -ksp changeit -o -k "${project_loc}/test_keys/OPENSSL/test_ssh-rsa-4096.pem" -kp 12345
+	 * -ksp changeit -o -k "${project_loc}/test_keys/OPENSSL/test_ssh-rsa-4096-key1.pem" -kp 12345
 	 */
 	public static void main(final String[] args){
 		logger.debug("ENTER:"+_CRYPTOfactory.class.getName()+".main()");
 		try {
 final	Options				options			= new Options();
 							options.addOption("dc", "dumpciphers", false, "Dump all the various cryptography ciphers present in this jvm.")
+									.addOption("T","test",false,"If keystorefile doesn't exist, set it to delete on exit.")
+									.addOption("O","test",false,"If the provided alias exists in the KeyStore, overwrite it.")
 									.addOption("ks", "keystore-file", true, "KeyStore file name")
 									.addOption(Option.builder("ksp")
 												.desc("KeyStore password")
@@ -724,13 +731,6 @@ final	Options				options			= new Options();
 												.desc("KeyStore type, otherwise defaults to:"+KEYSTOREDEFAULTS.TYPE.toString())
 												.longOpt("keystore-type")
 												.numberOfArgs(1)
-												.optionalArg(true)
-												.build()
-									)
-									.addOption(Option.builder("o")
-												.desc("If the provided alias exists in the KeyStore, overwrite it.")
-												.longOpt("overwrite")
-												.numberOfArgs(0)
 												.optionalArg(true)
 												.build()
 									)
@@ -755,19 +755,25 @@ final	CommandLineParser		parser			=	new DefaultParser();
 					throw new Exception("No KeyStore password was provided, can not proceed");
 				}
 final	File					ksFile			=	new File(cmd.hasOption("ks")?cmd.getOptionValue("ks"):KEYSTOREDEFAULTS.FILENAME.toString());
+				if (cmd.hasOption("T") && !ksFile.exists()) {
+								ksFile.deleteOnExit();
+				}
 final	String					ksPass			=	cmd.getOptionValue("ksp");
 final	String					ksAlias			=	cmd.hasOption("ksa")?cmd.getOptionValue("ksa"):KEYSTOREDEFAULTS.ROOTALIAS.toString();
 final	String					ksType			=	cmd.hasOption("kst")?cmd.getOptionValue("kst"):KEYSTOREDEFAULTS.TYPE.toString();
 		KeyStore				ks				=	null;
-				if (!ksFile.exists() && cmd.hasOption("k") && cmd.hasOption("kp")) {
+				if (!ksFile.exists()) {
+					if (cmd.hasOption("k") && cmd.hasOption("kp")) {
 final	File					kFile			=	new File(cmd.getOptionValue("k"));
 final	String					kPass			=	cmd.getOptionValue("kp");
 								ks				=	createNewKeyStore(ksFile,ksPass,kFile,kPass,365+5);
-				} else {		ks				=	KeyStore.getInstance(ksType,BC);
+					}
+				} else {		ks				=	KeyStore.getInstance(ksType,PROVIDER);
 final	FileInputStream			ksin			=	new FileInputStream(ksFile);
 					try { 		ks.load(ksin, ksPass.toCharArray());
 					} finally {	ksin.close();
 					}
+
 				}
 
 		//Instantiate the _CRYPTOfactory

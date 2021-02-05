@@ -61,7 +61,7 @@ final	public	static	Map<String,SupportedCrypto>	cryptos	=	new HashMap<String,Sup
 
 		SupportedCrypto(final String alias, final SupportedCipher cipher, final SupportedDigest digest, final SupportedSignature signature){
 			this.alias		=	alias;
-			factory	=	null;
+			factory			=	null;
 			this.cipher		=	cipher;
 			this.digest		=	digest;
 			this.signature	=	signature;
@@ -69,10 +69,10 @@ final	public	static	Map<String,SupportedCrypto>	cryptos	=	new HashMap<String,Sup
 
 		SupportedCrypto(final String alias, final SupportedCipher cipher){
 			this.alias		=	alias;
-			factory	=	null;
+			factory			=	null;
 			this.cipher		=	cipher;
-			digest		=	null;
-			signature	=	null;
+			digest			=	null;
+			signature		=	null;
 		}
 
 		SupportedCrypto(final String alias, final SupportedKeyFactory factory, final SupportedCipher cipher, final SupportedDigest digest, final SupportedSignature signature){
@@ -86,7 +86,7 @@ final	public	static	Map<String,SupportedCrypto>	cryptos	=	new HashMap<String,Sup
 		SupportedCrypto(final String alias, final SupportedKeyFactory factory, final SupportedDigest digest, final SupportedSignature signature){
 			this.alias		=	alias;
 			this.factory	=	factory;
-			cipher		=	null;
+			cipher			=	null;
 			this.digest		=	digest;
 			this.signature	=	signature;
 		}
